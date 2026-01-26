@@ -1,0 +1,32 @@
+http:
+  services:
+    stats-service:
+      loadBalancer:
+        servers:
+          - url: "http://sidecar:7070"
+  
+  middlewares:
+    stats:
+      plugin:
+        banan-stats:
+          sidecarURL: "http://sidecar:7070"
+          dashboardPath: "/stats"
+          dashboardToken: ""
+          cookieName: "stats_id"
+          cookiePath: "/"
+          cookieMaxAge: 2147483647
+          cookieSecure: false
+          cookieHTTPOnly: true
+          cookieSameSite: "Lax"
+          queueSize: 1024
+          flushInterval: "2s"
+          hostFilterMode: "per-host"
+
+  routers:
+    stats:
+      rule: "Path(`/stats`) || PathPrefix(`/stats/`)"
+      entryPoints:
+        - web
+      middlewares:
+        - stats
+      service: stats-service

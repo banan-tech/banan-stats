@@ -1,0 +1,24 @@
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+
+experimental:
+  localPlugins:
+    banan-stats:
+      moduleName: github.com/khaled/banan-stats/traefik-stats
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: banan-stats-network
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+log:
+  level: DEBUG

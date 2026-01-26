@@ -1,0 +1,58 @@
+services:
+  sidecar:
+    build:
+      context: ./banan-stats
+      dockerfile: Dockerfile
+    container_name: banan-stats-sidecar
+    ports:
+      - "7070:7070"
+    volumes:
+      - sidecar-data:/data
+    command: ["--db-path", "/data/clj_simple_stats.duckdb", "--listen", ":7070"]
+    networks:
+      - banan-stats-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7070/stats"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  traefik:
+    build:
+      context: .
+      dockerfile: Dockerfile.traefik
+    container_name: banan-stats-traefik
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - ./traefik-config.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik-dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik-stats:/plugins-local/src/github.com/khaled/banan-stats/traefik-stats
+    depends_on:
+      sidecar:
+        condition: service_healthy
+    networks:
+      - banan-stats-network
+    command:
+      - --configfile=/etc/traefik/traefik.yml
+
+  test-app:
+    image: nginx:alpine
+    container_name: banan-stats-test-app
+    networks:
+      - banan-stats-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.test-app.rule=Host(`localhost`)"
+      - "traefik.http.routers.test-app.entrypoints=web"
+      - "traefik.http.routers.test-app.middlewares=stats@file"
+
+volumes:
+  sidecar-data:
+
+networks:
+  banan-stats-network:
+    driver: bridge

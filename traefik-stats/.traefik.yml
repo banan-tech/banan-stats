@@ -1,0 +1,11 @@
+displayName: Banan Stats
+type: middleware
+import: github.com/khaled/banan-stats/traefik-stats/traefikstats
+summary: Minimal traffic statistics with a DuckDB sidecar.
+iconPath: ../docs/dashboard.webp
+testData:
+  sidecarURL: "http://localhost:7070"
+  dashboardPath: "/stats"
+  cookieName: "stats_id"
+  queueSize: 1024
+  flushInterval: "2s"

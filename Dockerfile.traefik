@@ -1,0 +1,5 @@
+# Use official Traefik image with plugin support
+FROM traefik:v3.0
+
+# Traefik v3 uses Yaegi to load plugins from source at runtime
+# The plugin source will be mounted via docker-compose volume

@@ -1,0 +1,87 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go build artifacts
+/bin/
+/dist/
+/build/
+/banan-stats/banan-stats
+/traefik-stats/traefik-stats
+
+# Go test binary, built with `go test -c`
+*.test
+
+# Go coverage files
+*.out
+coverage.html
+coverage.xml
+
+# Dependency directories
+vendor/
+
+# Go workspace file (optional - uncomment if you don't want to track it)
+# go.work.sum
+
+# Database files
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+tmp/
+temp/
+
+# Build artifacts
+*.a
+*.o
+*.so
+
+# Air (live reload tool)
+tmp/
+
+# Delve (debugger)
+__debug_bin
