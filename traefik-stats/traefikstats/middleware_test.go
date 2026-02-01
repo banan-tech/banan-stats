@@ -1,6 +1,7 @@
 package traefikstats
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -18,7 +19,7 @@ func TestCookieSecondVisit(t *testing.T) {
 
 	cfg := CreateConfig()
 	cfg.SidecarURL = sidecar.URL
-	cfg.FlushInterval = "10ms"
+	cfg.FlushInterval = "1h"
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -44,22 +45,33 @@ func TestCookieSecondVisit(t *testing.T) {
 }
 
 func TestIngestEventPosted(t *testing.T) {
-	events := make(chan ingestRequest, 1)
-	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/ingest" {
-			w.WriteHeader(http.StatusNotFound)
-			return
+	events := make(chan string, 1)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		if r.Body != nil {
+			defer r.Body.Close()
 		}
-		var req ingestRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
-			events <- req
+		scanner := bufio.NewScanner(r.Body)
+		for scanner.Scan() {
+			var evt event
+			if err := json.Unmarshal(scanner.Bytes(), &evt); err != nil {
+				continue
+			}
+			if evt.Path == "" {
+				continue
+			}
+			select {
+			case events <- evt.Path:
+			default:
+			}
 		}
-		w.WriteHeader(http.StatusAccepted)
-	}))
-	defer sidecar.Close()
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
 
 	cfg := CreateConfig()
-	cfg.SidecarURL = sidecar.URL
+	cfg.SidecarURL = server.URL
 	cfg.FlushInterval = "5ms"
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,9 +91,9 @@ func TestIngestEventPosted(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	select {
-	case ingested := <-events:
-		if len(ingested.Events) == 0 {
-			t.Fatalf("expected events, got none")
+	case path := <-events:
+		if path != "/hello" {
+			t.Fatalf("expected path /hello, got %q", path)
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("expected ingest call")

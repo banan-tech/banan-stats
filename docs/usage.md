@@ -6,14 +6,14 @@ Run locally:
 
 ```
 cd banan-stats
-go run ./cmd/stats-sidecar --db-path ./clj_simple_stats.duckdb --listen :7070
+cargo run --manifest-path ./banan-stats-rs/Cargo.toml -- --db-path ./clj_simple_stats.duckdb --listen :7070
 ```
 
 Run via Docker:
 
 ```
 cd banan-stats
-docker build -t banan-stats-sidecar .
+docker build -f banan-stats-rs/Dockerfile -t banan-stats-sidecar .
 docker run --rm -p 7070:7070 -v "$PWD:/data" banan-stats-sidecar --db-path /data/clj_simple_stats.duckdb
 ```
 

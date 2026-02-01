@@ -2,11 +2,9 @@ package traefikstats
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,6 +21,7 @@ type statsMiddleware struct {
 	next          http.Handler
 	cfg           *Config
 	client        *http.Client
+	streamClient  *streamClient
 	queue         chan event
 	stop          chan struct{}
 	flushInterval time.Duration
@@ -43,11 +42,17 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		config.QueueSize = 1024
 	}
 
+	streamClient, err := newStreamClient(config.SidecarURL)
+	if err != nil {
+		return nil, fmt.Errorf("stream client init failed: %w", err)
+	}
+
 	m := &statsMiddleware{
 		name:          name,
 		next:          next,
 		cfg:           config,
 		client:        &http.Client{Timeout: 5 * time.Second},
+		streamClient:  streamClient,
 		queue:         make(chan event, config.QueueSize),
 		stop:          make(chan struct{}),
 		flushInterval: flushInterval,
@@ -200,26 +205,11 @@ func (m *statsMiddleware) worker(ctx context.Context) {
 }
 
 func (m *statsMiddleware) flush(events []event) {
-	body, err := json.Marshal(ingestRequest{Events: events})
-	if err != nil {
-		log.Printf("[%s] stats marshal failed: %v", m.name, err)
-		return
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := m.streamClient.StreamEvents(ctx, events); err != nil {
+		log.Printf("[%s] stats stream failed: %v", m.name, err)
 	}
-
-	ingestURL := strings.TrimRight(m.cfg.SidecarURL, "/") + "/ingest"
-	req, err := http.NewRequest(http.MethodPost, ingestURL, bytes.NewReader(body))
-	if err != nil {
-		log.Printf("[%s] stats request failed: %v", m.name, err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := m.client.Do(req)
-	if err != nil {
-		log.Printf("[%s] stats send failed: %v", m.name, err)
-		return
-	}
-	_ = resp.Body.Close()
 }
 
 type cookieState struct {

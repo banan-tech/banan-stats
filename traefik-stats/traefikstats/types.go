@@ -15,7 +15,3 @@ type event struct {
 	Uniq        string    `json:"uniq"`
 	SecondVisit bool      `json:"secondVisit"`
 }
-
-type ingestRequest struct {
-	Events []event `json:"events"`
-}

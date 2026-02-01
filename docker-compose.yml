@@ -1,8 +1,8 @@
 services:
   sidecar:
     build:
-      context: ./banan-stats
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: banan-stats-rs/Dockerfile
     container_name: banan-stats-sidecar
     ports:
       - "7070:7070"

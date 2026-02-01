@@ -1,7 +1,7 @@
 # Docker Compose End-to-End Testing Setup
 
 This docker-compose file sets up a complete testing environment for banan-stats with:
-- **sidecar**: The stats sidecar service running on port 7070
+- **sidecar**: The stats sidecar service running HTTP on 7070
 - **traefik**: Traefik v3 with the banan-stats plugin installed
 - **test-app**: A simple nginx container for testing
 
@@ -16,7 +16,7 @@ docker-compose up --build
    - Traefik dashboard: http://localhost:8080
    - Test application: http://localhost
    - Stats dashboard: http://localhost/stats
-   - Sidecar API: http://localhost:7070
+   - Sidecar dashboard: http://localhost:7070/stats
 
 3. Stop all services:
 ```bash

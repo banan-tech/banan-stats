@@ -10,7 +10,7 @@ server-side dashboard.
 
 1. Request passes through the middleware.
 2. If the response is loggable (200 + HTML/RSS/Atom), an event is enqueued.
-3. A background worker batches events and POSTs to `POST /ingest` on the sidecar.
+3. A background worker batches events and streams them to the sidecar over HTTP.
 4. The sidecar enriches each event (agent/type/os/mult/uniq/ref_domain) and inserts into DuckDB.
 5. `GET /stats` renders the dashboard using DuckDB queries.
 

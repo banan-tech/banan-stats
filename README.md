@@ -1,8 +1,8 @@
 # Banan Stats
 
-This workspace contains two Go subprojects:
+This workspace contains the Rust sidecar and the Go Traefik plugin:
 
-- `banan-stats/` — DuckDB sidecar service that stores and renders stats
+- `banan-stats-rs/` — Rust sidecar service that stores and renders stats
 - `traefik-stats/` — Traefik v3 middleware plugin that ships events to the sidecar
 
 The workspace is configured via `go.work`.
@@ -13,7 +13,7 @@ The workspace is configured via `go.work`.
 
 ```
 cd banan-stats
-go run ./cmd/stats-sidecar --db-path ./clj_simple_stats.duckdb --listen :7070
+cargo run --manifest-path ./banan-stats-rs/Cargo.toml -- --db-path ./clj_simple_stats.duckdb --listen :7070
 ```
 
 2. Configure Traefik to use the plugin from `traefik-stats` and point it to the sidecar.
