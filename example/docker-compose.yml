@@ -1,8 +1,8 @@
 services:
   sidecar:
     build:
-      context: .
-      dockerfile: banan-stats-rs/Dockerfile
+      context: ..
+      dockerfile: banan-stats/Dockerfile
     container_name: banan-stats-sidecar
     ports:
       - "7070:7070"
@@ -20,8 +20,8 @@ services:
 
   traefik:
     build:
-      context: .
-      dockerfile: Dockerfile.traefik
+      context: ..
+      dockerfile: example/Dockerfile.traefik
     container_name: banan-stats-traefik
     ports:
       - "80:80"
@@ -30,7 +30,7 @@ services:
       - ./traefik-config.yml:/etc/traefik/traefik.yml:ro
       - ./traefik-dynamic.yml:/etc/traefik/dynamic.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik-stats:/plugins-local/src/github.com/khaled/banan-stats/traefik-stats
+      - ../traefik-stats:/plugins-local/src/github.com/khaled/banan-stats/traefik-stats
     depends_on:
       sidecar:
         condition: service_healthy

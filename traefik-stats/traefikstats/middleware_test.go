@@ -4,22 +4,20 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestCookieSecondVisit(t *testing.T) {
-	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
-	}))
-	defer sidecar.Close()
-
 	cfg := CreateConfig()
-	cfg.SidecarURL = sidecar.URL
+	cfg.SidecarURL = "http://example.com"
 	cfg.FlushInterval = "1h"
+	cfg.BufferPath = filepath.Join(t.TempDir(), "buffer.sqlite")
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -31,6 +29,9 @@ func TestCookieSecondVisit(t *testing.T) {
 		t.Fatalf("new middleware failed: %v", err)
 	}
 	m := handler.(*statsMiddleware)
+	m.streamClient.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return newResponse(http.StatusAccepted), nil
+	})
 	defer m.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
@@ -46,8 +47,23 @@ func TestCookieSecondVisit(t *testing.T) {
 
 func TestIngestEventPosted(t *testing.T) {
 	events := make(chan string, 1)
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/x-ndjson")
+
+	cfg := CreateConfig()
+	cfg.SidecarURL = "http://example.com"
+	cfg.FlushInterval = "5ms"
+	cfg.BufferPath = filepath.Join(t.TempDir(), "buffer.sqlite")
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	handler, err := New(context.Background(), next, cfg, "test")
+	if err != nil {
+		t.Fatalf("new middleware failed: %v", err)
+	}
+	m := handler.(*statsMiddleware)
+	m.streamClient.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if r.Body != nil {
 			defer r.Body.Close()
 		}
@@ -65,25 +81,8 @@ func TestIngestEventPosted(t *testing.T) {
 			default:
 			}
 		}
+		return newResponse(http.StatusAccepted), nil
 	})
-
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	cfg := CreateConfig()
-	cfg.SidecarURL = server.URL
-	cfg.FlushInterval = "5ms"
-
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte("ok"))
-	})
-
-	handler, err := New(context.Background(), next, cfg, "test")
-	if err != nil {
-		t.Fatalf("new middleware failed: %v", err)
-	}
-	m := handler.(*statsMiddleware)
 	defer m.Close()
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/hello", nil)
@@ -97,5 +96,19 @@ func TestIngestEventPosted(t *testing.T) {
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("expected ingest call")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func newResponse(status int) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("")),
 	}
 }
