@@ -23,6 +23,7 @@ impl Store {
 
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS stats (
+                 event_id   UUID,
                  date       DATE,
                  time       TIME,
                  host       VARCHAR,
@@ -39,8 +40,10 @@ impl Store {
                  set_cookie UUID,
                  uniq       UUID
              );
+             ALTER TABLE stats ADD COLUMN IF NOT EXISTS event_id UUID;
              ALTER TABLE stats ADD COLUMN IF NOT EXISTS host VARCHAR;
-             CREATE INDEX IF NOT EXISTS idx_stats_host_date ON stats(host, date);",
+             CREATE INDEX IF NOT EXISTS idx_stats_host_date ON stats(host, date);
+             CREATE UNIQUE INDEX IF NOT EXISTS idx_stats_event_id ON stats(event_id);",
         )?;
 
         Ok(Self {
@@ -56,14 +59,16 @@ impl Store {
 
             let mut stmt = tx.prepare(
                 "INSERT INTO stats
-                 (date, time, host, path, query, ip, user_agent, referrer, type, agent, os, ref_domain, mult, set_cookie, uniq)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 (event_id, date, time, host, path, query, ip, user_agent, referrer, type, agent, os, ref_domain, mult, set_cookie, uniq)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(event_id) DO NOTHING",
             )?;
             let mut upd_stmt = tx.prepare("UPDATE stats SET uniq = ? WHERE set_cookie = ?")?;
 
             for mut line in lines {
                 analyzer::analyze(&mut line);
                 stmt.execute(params![
+                    null_str(&line.event_id),
                     null_str(&line.date),
                     null_str(&line.time),
                     null_str(&line.host),

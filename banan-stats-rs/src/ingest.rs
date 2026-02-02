@@ -23,6 +23,8 @@ pub fn router(state: AppState) -> Router {
 #[serde(rename_all = "camelCase")]
 struct IngestEvent {
     #[serde(default)]
+    event_id: String,
+    #[serde(default)]
     timestamp: Option<DateTime<Utc>>,
     #[serde(default)]
     host: String,
@@ -100,6 +102,7 @@ async fn ingest_stream(state: AppState, body: Body) -> Result<(), anyhow::Error>
 fn event_to_line(evt: IngestEvent) -> Line {
     let ts = evt.timestamp.unwrap_or_else(Utc::now);
     Line {
+        event_id: evt.event_id,
         date: ts.format("%Y-%m-%d").to_string(),
         time: ts.format("%H:%M:%S").to_string(),
         host: evt.host,

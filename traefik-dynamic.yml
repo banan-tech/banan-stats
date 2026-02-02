@@ -20,6 +20,9 @@ http:
           cookieSameSite: "Lax"
           queueSize: 1024
           flushInterval: "2s"
+          batchSize: 100
+          bufferPath: "/tmp/banan-stats-buffer.sqlite"
+          bufferMaxEvents: 5000
           hostFilterMode: "per-host"
 
   routers:

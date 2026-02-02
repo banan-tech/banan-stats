@@ -17,6 +17,9 @@ type Config struct {
 
 	QueueSize      int    `json:"queueSize" yaml:"queueSize" toml:"queueSize"`
 	FlushInterval  string `json:"flushInterval" yaml:"flushInterval" toml:"flushInterval"`
+	BatchSize      int    `json:"batchSize" yaml:"batchSize" toml:"batchSize"`
+	BufferPath     string `json:"bufferPath" yaml:"bufferPath" toml:"bufferPath"`
+	BufferMaxEvents int   `json:"bufferMaxEvents" yaml:"bufferMaxEvents" toml:"bufferMaxEvents"`
 	HostFilterMode string `json:"hostFilterMode" yaml:"hostFilterMode" toml:"hostFilterMode"`
 }
 
@@ -36,6 +39,9 @@ func CreateConfig() *Config {
 
 		QueueSize:      1024,
 		FlushInterval:  (2 * time.Second).String(),
+		BatchSize:      100,
+		BufferPath:     "/tmp/banan-stats-buffer.sqlite",
+		BufferMaxEvents: 5000,
 		HostFilterMode: "per-host",
 	}
 }

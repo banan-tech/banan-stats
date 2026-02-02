@@ -3,6 +3,7 @@ package traefikstats
 import "time"
 
 type event struct {
+	EventID     string    `json:"eventId"`
 	Timestamp   time.Time `json:"timestamp"`
 	Host        string    `json:"host"`
 	Path        string    `json:"path"`

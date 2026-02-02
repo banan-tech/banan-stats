@@ -10,7 +10,7 @@ server-side dashboard.
 
 1. Request passes through the middleware.
 2. If the response is loggable (200 + HTML/RSS/Atom), an event is enqueued.
-3. A background worker batches events and streams them to the sidecar over HTTP.
+3. A background worker persists events to a disk-backed SQLite buffer, batches them, and streams them to the sidecar over HTTP.
 4. The sidecar enriches each event (agent/type/os/mult/uniq/ref_domain) and inserts into DuckDB.
 5. `GET /stats` renders the dashboard using DuckDB queries.
 
@@ -49,6 +49,6 @@ CREATE TABLE stats (
 
 ### Plugin internals
 
-- Uses a bounded channel for async batching.
+- Uses a disk-backed SQLite queue to avoid drops and enable retries.
 - Sets the tracking cookie before the upstream handler runs to avoid buffering responses.
 - Protects the dashboard with an optional bearer token.

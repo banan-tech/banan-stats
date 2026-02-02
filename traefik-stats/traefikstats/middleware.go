@@ -22,9 +22,12 @@ type statsMiddleware struct {
 	cfg           *Config
 	client        *http.Client
 	streamClient  *streamClient
-	queue         chan event
+	queue         *diskQueue
 	stop          chan struct{}
 	flushInterval time.Duration
+	batchSize     int
+	backoff       time.Duration
+	nextAttempt   time.Time
 }
 
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
@@ -41,10 +44,21 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 	if config.QueueSize <= 0 {
 		config.QueueSize = 1024
 	}
+	if config.BatchSize <= 0 {
+		config.BatchSize = 100
+	}
+	if strings.TrimSpace(config.BufferPath) == "" {
+		config.BufferPath = "/tmp/banan-stats-buffer.sqlite"
+	}
 
 	streamClient, err := newStreamClient(config.SidecarURL)
 	if err != nil {
 		return nil, fmt.Errorf("stream client init failed: %w", err)
+	}
+
+	queue, err := newDiskQueue(config.BufferPath, config.BufferMaxEvents)
+	if err != nil {
+		return nil, fmt.Errorf("buffer init failed: %w", err)
 	}
 
 	m := &statsMiddleware{
@@ -53,9 +67,10 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		cfg:           config,
 		client:        &http.Client{Timeout: 5 * time.Second},
 		streamClient:  streamClient,
-		queue:         make(chan event, config.QueueSize),
+		queue:         queue,
 		stop:          make(chan struct{}),
 		flushInterval: flushInterval,
+		batchSize:     config.BatchSize,
 	}
 	go m.worker(ctx)
 	return m, nil
@@ -85,6 +100,9 @@ func (m *statsMiddleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 func (m *statsMiddleware) Close() error {
 	close(m.stop)
+	if m.queue != nil {
+		_ = m.queue.Close()
+	}
 	return nil
 }
 
@@ -158,6 +176,7 @@ func (m *statsMiddleware) enqueueEvent(req *http.Request, contentType string, co
 	}
 
 	evt := event{
+		EventID:     newUUID(),
 		Timestamp:   time.Now().UTC(),
 		Host:        normalizeHost(req.Host),
 		Path:        req.URL.Path,
@@ -171,10 +190,8 @@ func (m *statsMiddleware) enqueueEvent(req *http.Request, contentType string, co
 		SecondVisit: cookieState.secondVisit,
 	}
 
-	select {
-	case m.queue <- evt:
-	default:
-		log.Printf("[%s] stats queue full, dropping event", m.name)
+	if err := m.queue.Enqueue(evt); err != nil {
+		log.Printf("[%s] stats buffer enqueue failed: %v", m.name, err)
 	}
 }
 
@@ -182,34 +199,69 @@ func (m *statsMiddleware) worker(ctx context.Context) {
 	ticker := time.NewTicker(m.flushInterval)
 	defer ticker.Stop()
 
-	var buf []event
 	for {
 		select {
 		case <-m.stop:
 			return
 		case <-ctx.Done():
 			return
-		case evt := <-m.queue:
-			buf = append(buf, evt)
-			if len(buf) >= 100 {
-				m.flush(buf)
-				buf = buf[:0]
-			}
 		case <-ticker.C:
-			if len(buf) > 0 {
-				m.flush(buf)
-				buf = buf[:0]
-			}
+			m.flush()
+		case <-m.queue.notify:
+			m.flush()
 		}
 	}
 }
 
-func (m *statsMiddleware) flush(events []event) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := m.streamClient.StreamEvents(ctx, events); err != nil {
-		log.Printf("[%s] stats stream failed: %v", m.name, err)
+func (m *statsMiddleware) flush() {
+	now := time.Now()
+	if !m.nextAttempt.IsZero() && now.Before(m.nextAttempt) {
+		return
 	}
+	for {
+		batch, err := m.queue.FetchBatch(m.batchSize)
+		if err != nil {
+			log.Printf("[%s] stats buffer read failed: %v", m.name, err)
+			return
+		}
+		if len(batch) == 0 {
+			m.backoff = 0
+			m.nextAttempt = time.Time{}
+			return
+		}
+
+		events := make([]event, 0, len(batch))
+		lastID := batch[len(batch)-1].ID
+		for _, item := range batch {
+			events = append(events, item.Event)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err = m.streamClient.StreamEvents(ctx, events)
+		cancel()
+		if err != nil {
+			log.Printf("[%s] stats stream failed: %v", m.name, err)
+			m.scheduleBackoff()
+			return
+		}
+		if err := m.queue.DeleteUpTo(lastID); err != nil {
+			log.Printf("[%s] stats buffer delete failed: %v", m.name, err)
+			m.scheduleBackoff()
+			return
+		}
+	}
+}
+
+func (m *statsMiddleware) scheduleBackoff() {
+	if m.backoff <= 0 {
+		m.backoff = 500 * time.Millisecond
+	} else {
+		m.backoff *= 2
+		if m.backoff > 10*time.Second {
+			m.backoff = 10 * time.Second
+		}
+	}
+	m.nextAttempt = time.Now().Add(m.backoff)
 }
 
 type cookieState struct {

@@ -6,6 +6,7 @@ use url::Url;
 
 #[derive(Clone, Debug)]
 pub struct Line {
+    pub event_id: String,
     pub date: String,
     pub time: String,
     pub host: String,
