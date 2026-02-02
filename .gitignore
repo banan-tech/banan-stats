@@ -79,6 +79,7 @@ temp/
 *.a
 *.o
 *.so
+target/
 
 # Air (live reload tool)
 tmp/
